@@ -115,12 +115,15 @@ API_TIMEOUT_MS = 3000000
 
 
 def _clean_schema(obj):
-    """递归清除 JSON Schema 中不支持的字段"""
+    """递归清除 JSON Schema 中不支持的字段
+    
+    移除 Anthropic API 不支持的字段：additionalProperties, strict
+    """
     if not isinstance(obj, dict):
         return obj
     cleaned = {}
     for k, v in obj.items():
-        if k in ("additionalProperties",):
+        if k in ("additionalProperties", "strict"):
             continue
         if isinstance(v, dict):
             cleaned[k] = _clean_schema(v)
@@ -132,26 +135,39 @@ def _clean_schema(obj):
 
 
 def _convert_tools_to_anthropic(tools: list) -> list:
-    """将 OpenAI 格式的工具定义转换为 Anthropic 格式"""
+    """将 Responses API 格式的工具定义转换为 Anthropic 格式
+    
+    Responses API 工具格式: {"type": "function", "name": "...", "description": "...", "parameters": {...}}
+    Anthropic 工具格式: {"name": "...", "description": "...", "input_schema": {...}}
+    """
     result = []
     for tool in tools:
         if not isinstance(tool, dict):
             continue
         if tool.get("type") != "function":
             continue
-        func = tool.get("function", {})
+        # Responses API 格式：name/description/parameters 在顶层
+        # 同时兼容 OpenAI Chat Completions 格式：在 function 子对象中
+        name = tool.get("name", "") or tool.get("function", {}).get("name", "")
+        description = tool.get("description", "") or tool.get("function", {}).get("description", "")
+        parameters = tool.get("parameters") or tool.get("function", {}).get("parameters")
+        
         anthropic_tool = {
-            "name": func.get("name", ""),
-            "description": func.get("description", ""),
+            "name": name,
+            "description": description,
         }
-        if "parameters" in func:
-            anthropic_tool["input_schema"] = _clean_schema(func["parameters"])
+        if parameters:
+            anthropic_tool["input_schema"] = _clean_schema(parameters)
         result.append(anthropic_tool)
     return result
 
 
 def _convert_tool_choice_anthropic(tc):
-    """将 OpenAI tool_choice 转换为 Anthropic 格式"""
+    """将 Responses API tool_choice 转换为 Anthropic 格式
+    
+    Responses API 格式: {"type": "function", "name": "..."}
+    Anthropic 格式: {"type": "tool", "name": "..."}
+    """
     if tc is None:
         return {"type": "auto"}
     if isinstance(tc, str):
@@ -162,7 +178,9 @@ def _convert_tool_choice_anthropic(tc):
         if tc == "required":
             return {"type": "any"}
     if isinstance(tc, dict) and tc.get("type") == "function":
-        func_name = tc.get("function", {}).get("name", "")
+        # Responses API 格式：name 在顶层
+        # 同时兼容 OpenAI Chat Completions 格式：name 在 function 子对象中
+        func_name = tc.get("name", "") or tc.get("function", {}).get("name", "")
         if func_name:
             return {"type": "tool", "name": func_name}
     return {"type": "auto"}
@@ -235,15 +253,21 @@ def extract_messages_for_anthropic(data: dict):
     pending_tool_calls = []
 
     def _flush_tool_calls():
+        """将累积的 tool_calls 合并为一个 assistant 消息"""
         nonlocal pending_tool_calls
         if pending_tool_calls:
             content_blocks = []
             for tc in pending_tool_calls:
+                # 安全解析 JSON，失败时使用空对象
+                try:
+                    input_data = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                except json.JSONDecodeError:
+                    input_data = {}
                 content_blocks.append({
                     "type": "tool_use",
                     "id": tc["id"],
                     "name": tc["name"],
-                    "input": json.loads(tc["arguments"]) if tc["arguments"] else {}
+                    "input": input_data,
                 })
             messages.append({"role": "assistant", "content": content_blocks})
             pending_tool_calls = []
@@ -273,11 +297,16 @@ def extract_messages_for_anthropic(data: dict):
                         if t.strip():
                             text_parts.append(t)
                     elif c_type == "tool_call":
+                        # 安全解析 JSON
+                        try:
+                            tool_input = json.loads(c.get("arguments", "{}")) if c.get("arguments") else {}
+                        except json.JSONDecodeError:
+                            tool_input = {}
                         tool_uses.append({
                             "type": "tool_use",
                             "id": c.get("id", ""),
                             "name": c.get("name", ""),
-                            "input": json.loads(c.get("arguments", "{}")) if c.get("arguments") else {}
+                            "input": tool_input,
                         })
 
                 content_blocks = []
