@@ -1,0 +1,25 @@
+{
+  "deepseek": {
+    "api_key": "sk-3f94...",
+    "model": "deepseek-v4-flash",
+    "api_url": "https://api.deepseek.com/v1/chat/completions",
+    "port": 5000,
+    "debug": false
+  },
+  "glm": {
+    "api_key": "8a41c027a5274dcab4...",
+    "model": "glm-5",
+    "base_url": "https://open.bigmodel.cn/api/anthropic",
+    "auth_type": "x-api-key",
+    "port": 5001,
+    "debug": false
+  },
+  "aliyun": {
+    "api_key": "sk-sp-dfeg...",
+    "model": "glm-5",
+    "base_url": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    "auth_type": "bearer",
+    "port": 5002,
+    "debug": false
+  }
+}

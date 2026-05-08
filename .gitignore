@@ -1,0 +1,22 @@
+# Config (contains API keys)
+config.json
+
+# Debug logs
+proxy_debug.log
+debug_deepseek.log
+debug_glm.log
+debug_aliyun.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/

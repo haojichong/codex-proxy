@@ -1,0 +1,7 @@
+# AI Proxy dependencies
+# pip install -r requirements.txt
+# Python >= 3.10
+
+flask>=2.0        # Web framework
+requests>=2.28    # HTTP client
+waitress>=2.0     # WSGI server with SSE support
